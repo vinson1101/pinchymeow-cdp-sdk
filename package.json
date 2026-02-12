@@ -1,0 +1,17 @@
+{
+  "name": "pinchyMeow-cdp-sdk",
+  "version": "1.0.0",
+  "description": "Coinbase CDP Wallet Tools",
+  "main": "src/wallet.js",
+  "scripts": {
+    "balance": "node src/wallet.js balance",
+    "info": "node src/wallet.js info",
+    "transfer-eth": "node src/transfer-eth.js",
+    "transfer-usdc": "node src/transfer-usdc.js"
+  },
+  "dependencies": {
+    "@coinbase/cdp-sdk": "1.0.0",
+    "dotenv": "16.4.5",
+    "viem": "^2.45.3"
+  }
+}
