@@ -37,6 +37,21 @@ class SafeTrader:
         """
         self.core = CDPTrader()
         self.logger = logger
+    """Enhanced trading with safety checks"""
+
+    # Constants
+    HARDCODED_SLIPPAGE_BPS = 100  # 1% slippage (hardcoded, non-configurable)
+    APPROVAL_THRESHOLD_USD = 100  # $100 USD threshold for human approval
+
+    def __init__(self, logger=None):
+        """
+        Initialize safe trader
+
+        Args:
+            logger: Optional TransactionLogger instance
+        """
+        self.core = CDPTrader()
+        self.logger = logger
 
     async def calculate_usd_value(
         self,

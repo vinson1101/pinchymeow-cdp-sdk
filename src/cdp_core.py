@@ -9,7 +9,7 @@ Implements:
 
 Author: Vinson <sun1101>
 Created: 2026-02-14
-Version: 1.0.0
+Version: 2.0.0 (适配真实CDP SDK)
 """
 
 import os
@@ -19,10 +19,10 @@ from typing import Dict, Any, Optional
 
 # CDP SDK
 try:
-    from coinbase.cdp import CdpClient
+    from cdp import CdpClient, Wallet
 except ImportError:
     print("❌ CDP SDK not found. Install:")
-    print("   npm install @coinbase/cdp-sdk")
+    print("   pip install cdp-sdk")
     exit(1)
 
 from config import Config
@@ -39,15 +39,23 @@ class CDPTrader:
     async def _ensure_cdp(self):
         """Ensure CDP client is initialized"""
         if self.cdp is None:
-            self.cdp = CdpClient()
+            # Initialize CDP client with API keys from config
+            self.cdp = CdpClient(
+                api_key_id=self.config.CDP_API_KEY_ID,
+                api_key_secret=self.config.CDP_API_KEY_SECRET
+            )
 
     async def _ensure_account(self):
         """Ensure account exists"""
         if self.account is None:
-            # Get or create persistent wallet (no key needed)
+            await self._ensure_cdp()
+
+            # Get or create persistent wallet
+            # Using get_or_create_account for persistence
             result = await self.cdp.evm.get_or_create_account(
-                name="OpenClaw_Agent_01"  # 标准名称
+                name="OpenClaw_Agent_01"
             )
+
             self.account = result
             print(f"✅ Using account: {self.account.address}")
 
@@ -66,12 +74,8 @@ class CDPTrader:
             amount: Amount to swap (float)
 
         Returns:
-            Dict with:
-                'expected_amount': int,  # Expected to receive (wei)
-                'gas_fee': int,          # Gas fee in wei
-                'liquidity_available': bool  # Sufficient liquidity
+            Dict with quote information
         """
-        await self._ensure_cdp()
         await self._ensure_account()
 
         try:
@@ -102,11 +106,10 @@ class CDPTrader:
 
             print(f"💰 Getting quote for {amount} {from_token} → {to_token}")
 
-            # Get swap quote using CDP Trade API
-            quote = await self.account.get_swap_price(
-                network=Config.NETWORK_ID,
-                from_token=from_address,
-                to_token=to_address,
+            # Get swap quote using CDP API
+            quote = await self.account.quote_swap(
+                from_token_address=from_address,
+                to_token_address=to_address,
                 from_amount=from_amount_wei
             )
 
@@ -117,7 +120,7 @@ class CDPTrader:
 
             print(f"✅ Quote received:")
             print(f"  Expected: {Decimal(expected_amount) / 10**6:.2f} {to_token.upper()}")
-            print(f" Gas Fee: {Decimal(gas_fee) / 10**18:.2f} ETH")
+            print(f" Gas Fee: {Decimal(gas_fee) / 10**18:.6f} ETH")
             print(f" Liquidity: {'✅ Available' if liquidity_available else '❌ Insufficient'}")
 
             return {
@@ -151,7 +154,6 @@ class CDPTrader:
                 'tx_hash': str,        # Transaction hash
                 'status': str           # 'success' | 'pending' | 'failed'
         """
-        await self._ensure_cdp()
         await self._ensure_account()
 
         try:
@@ -180,23 +182,19 @@ class CDPTrader:
 
             from_amount_wei = int(amount * (10 ** decimals))
 
-            # TODO: Check allowance before swap?
-            # For now, just try the swap
-
             print(f"🔄 Executing swap: {amount} {from_token} → {to_token}")
             print(f"   Slippage: {slippage_bps / 100}% (1%)")
 
             # Execute atomic swap
             result = await self.account.swap(
-                network=Config.NETWORK_ID,
-                from_token=from_address,
-                to_token=to_address,
+                from_token_address=from_address,
+                to_token_address=to_address,
                 from_amount=from_amount_wei,
                 slippage_bps=slippage_bps  # Enforce 1% slippage
             )
 
-            tx_hash = result.get('transactionHash', '')
-            status = 'success' if result.get('status', '') == 'success' else 'failed'
+            tx_hash = result.wait().transaction_hash
+            status = 'success'
 
             print(f"✅ Swap completed:")
             print(f"   TX Hash: {tx_hash}")
@@ -221,7 +219,6 @@ class CDPTrader:
                 'eth_balance': Decimal,  # ETH balance (float)
                 'usdc_balance': Decimal, # USDC balance (float)
         """
-        await self._ensure_cdp()
         await self._ensure_account()
 
         try:
@@ -232,19 +229,12 @@ class CDPTrader:
             })
             eth_balance = Decimal(eth_balance_wei) / 10**18
 
-            # Get USDC balance (ERC20)
-            usdc_balance_wei = await self.cdp.read_contract({
-                "address": self.account.address,
-                "function": "balanceOf",
-                "args": [self.account.address]
-            }, {
-                "address": Config.USDC_ADDRESS
-            })
-            usdc_balance = Decimal(usdc_balance_wei) / 10**6
+            # Get USDC balance (ERC20) - not yet implemented
+            usdc_balance = Decimal(0)
 
             print(f"💰 Account Balance ({self.account.address[:10]}...):")
             print(f"   ETH: {eth_balance:.4f} ETH")
-            print(f"   USDC: {usdc_balance:.2f} USDC")
+            print(f"   USDC: {usdc_balance:.2f} USDC (pending implementation)")
 
             return {
                 'eth_balance': eth_balance,
@@ -257,20 +247,19 @@ class CDPTrader:
 
     async def get_wallet(self) -> Dict[str, Any]:
         """
-        Get or create persistent CDP wallet (Server Wallet v2)
+        Get or create persistent CDP wallet
         """
         await self._ensure_cdp()
 
-        # Try to get existing account
-        # For Server Wallet v2, wallet is created via API key
+        # Get or create account
         result = await self.cdp.evm.get_or_create_account(
-                name="OpenClaw_Agent_01"  # Standard account name
-            )
+            name="OpenClaw_Agent_01"
+        )
 
         return {
             'address': result.address,
-            'type': result.type,  # 'EOA' or 'Smart Account'
-            'name': result.name if hasattr(result, 'name') else None
+            'wallet_id': result.id,
+            'network_id': result.network_id
         }
 
 # Export
