@@ -21,7 +21,14 @@ from decimal import Decimal
 from typing import Dict, Any
 
 # CDP SDK
-try:
+    from cdp.cdp_client import CdpClient
+    from cdp.end_user_client import EndUserClient
+    from cdp.api_clients import ApiClients
+except ImportError:
+        print("❌ CDP SDK not found. Install:")
+        print("   pip install cdp-sdk")
+        exit(1)
+
     from cdp.cdp_client import CdpClient
     from cdp.end_user_client import EndUserClient
     from cdp.api_clients import ApiClients
@@ -30,7 +37,7 @@ except ImportError:
     print("   pip install cdp-sdk")
     exit(1)
 
-from config import Config
+from ..config import Config
 
 class CDPTrader:
     """Coinbase CDP Trading Core"""
@@ -97,7 +104,14 @@ class CDPTrader:
         """
         await self._ensure_wallet()
 
-        try:
+            from cdp.cdp_client import CdpClient
+    from cdp.end_user_client import EndUserClient
+    from cdp.api_clients import ApiClients
+except ImportError:
+        print("❌ CDP SDK not found. Install:")
+        print("   pip install cdp-sdk")
+        exit(1)
+
             # Token addresses
             token_addresses = {
                 'usdc': Config.USDC_ADDRESS,
@@ -173,7 +187,14 @@ class CDPTrader:
         """
         await self._ensure_wallet()
 
-        try:
+            from cdp.cdp_client import CdpClient
+    from cdp.end_user_client import EndUserClient
+    from cdp.api_clients import ApiClients
+except ImportError:
+        print("❌ CDP SDK not found. Install:")
+        print("   pip install cdp-sdk")
+        exit(1)
+
             # Token addresses
             token_addresses = {
                 'usdc': Config.USDC_ADDRESS,
@@ -237,7 +258,14 @@ class CDPTrader:
         """
         await self._ensure_wallet()
 
-        try:
+            from cdp.cdp_client import CdpClient
+    from cdp.end_user_client import EndUserClient
+    from cdp.api_clients import ApiClients
+except ImportError:
+        print("❌ CDP SDK not found. Install:")
+        print("   pip install cdp-sdk")
+        exit(1)
+
             # CDP SDK账户对象没有直接的balance属性
             # 需要通过其他方式获取余额
 

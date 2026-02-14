@@ -268,3 +268,4 @@ class SafeTrader:
 
 # Export
 __all__ = ['SafeTrader']
+test
