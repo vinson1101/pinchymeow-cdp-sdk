@@ -144,7 +144,7 @@ python src/sentinel.py --daemon
 
 ## 依赖
 
-- `coinbase-cdp-sdk>=1.0.0`
+- `cdp-sdk>=1.39.1`
 - `web3>=6.15.0`
 - `python-dotenv>=1.0.0`
 
