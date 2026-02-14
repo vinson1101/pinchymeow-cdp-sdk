@@ -25,12 +25,16 @@
 
 ```
 pinchymeow-cdp-sdk/
-├── .env.python.example    # Python 环境变量示例
-├── requirements.txt        # Python 依赖
-├── config.py            # 配置管理（环境变量 + 常量）
-├── wallet.py            # CDP 核心类
-├── trader.py            # 交易核心类
-└── README.md
+├── config.py                    # 配置管理（环境变量 + 常量）
+├── requirements.txt             # Python 依赖
+├── README.md                    # 项目说明
+└── src/                         # Python 源代码
+    ├── __init__.py              # 包初始化
+    ├── cdp_core.py              # CDP 核心类（交易、余额、钱包）
+    ├── trader.py                # 增强交易模块（安全检查）
+    ├── transaction_logger.py    # 交易日志记录器
+    ├── daily_report.py          # 每日报告生成器
+    └── sentinel.py              # 价格哨兵脚本
 ```
 
 ---
@@ -55,29 +59,56 @@ NETWORK=base-mainnet
 ### Python SDK 导入
 
 ```python
-from wallet import CDPWallet
+from src import CDPTrader, SafeTrader, TransactionLogger
 from config import Config
 
-# 初始化钱包
-wallet = CDPWallet()
-await wallet.init()
+# 初始化交易核心
+core = CDPTrader()
 
 # 查询余额
-balance = await wallet.get_balance('usdc')
-print(f"USDC 余额: {balance}")
+balance = await core.get_balance()
+print(f"ETH: {balance['eth_balance']}, USDC: {balance['usdc_balance']}")
+
+# 获取价格报价（免费，无 Gas）
+quote = await core.get_quote(from_token='eth', to_token='usdc', amount=1.0)
+print(f"预期收到: {quote['expected_amount']} USDC")
+```
+
+### 安全交易（推荐）
+
+```python
+from src import SafeTrader, TransactionLogger
+
+# 初始化安全交易器
+logger = TransactionLogger()
+trader = SafeTrader(logger=logger)
+
+# 安全交换（自动检查大额交易）
+result = await trader.swap_with_approval(
+    from_token='usdc',
+    to_token='eth',
+    amount=10.0,
+    agent_name='F0x'
+)
+
+if result['status'] == 'requires_approval':
+    print(f"⚠️  大额交易需要确认: ${result['usd_value']:.2f}")
+elif result['status'] == 'success':
+    print(f"✅ 交易成功: {result['tx_hash']}")
 ```
 
 ### CLI 调用
 
 ```bash
 # 查询余额
-python wallet.py --account PinchyMeow-Main --balance usdc
+python src/daily_report.py              # 今日交易报告
+python src/daily_report.py 2026-02-14   # 指定日期报告
 
-# 发送 USDC
-python wallet.py --account PinchyMeow-Main --send 0x... 1.0
+# 价格哨兵（单次检查）
+python src/sentinel.py
 
-# 代币交换
-python trader.py --account PinchyMeow-Main --swap usdc eth 1.0
+# 价格哨兵（守护进程）
+python src/sentinel.py --daemon
 ```
 
 ---
@@ -90,9 +121,20 @@ python trader.py --account PinchyMeow-Main --swap usdc eth 1.0
 
 #### 新增
 - ✅ Python SDK 实现
-- ✅ 配置管理模块
-- ✅ 钱包管理模块
-- ✅ 交易执行模块
+- ✅ 配置管理模块 (`config.py`)
+- ✅ CDP 核心交易模块 (`cdp_core.py`)
+- ✅ 增强交易模块 (`trader.py`) - 安全检查、滑点限制、大额确认
+- ✅ 交易日志记录器 (`transaction_logger.py`) - JSONL 格式、按日轮转
+- ✅ 每日报告生成器 (`daily_report.py`) - 交易统计、Agent 分组
+- ✅ 价格哨兵脚本 (`sentinel.py`) - 轻量级监控、自动触发
+
+#### 核心特性
+- 🔒 固定滑点 1%（防止 LLM 自行决定导致大额损失）
+- 🛡️ 大额交易人工确认机制（阈值 $100 USD）
+- 📊 免费价格预言机（高频监控，无 Gas 消耗）
+- 📝 完整交易日志记录（JSONL 格式）
+- 📈 每日交易报告生成
+- 🚨 价格哨兵自动触发（ETH < $2000）
 
 #### 移除
 - ❌ Node.js 实现 (v1.0.0)
