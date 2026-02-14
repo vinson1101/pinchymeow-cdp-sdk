@@ -20,3 +20,26 @@ logs/
 .vscode/
 *.swp
 *.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+.eggs/
+.lib/
+.lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+.venv/
+ENV/
+env/
+.venv/
+.eggs/
