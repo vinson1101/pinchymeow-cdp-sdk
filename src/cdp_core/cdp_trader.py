@@ -9,7 +9,7 @@ Implements core CDP trading functionality:
 
 Author: Vinson <sun1101>
 Created: 2026-02-14
-Version: 1.0.0
+Version: 1.1.0
 """
 
 import asyncio
@@ -31,7 +31,6 @@ class CDPTrader:
             agent_name: Agent name (e.g., 'F0x')
         """
         # Validate account access (prefix matching)
-        from config import Config
         validate_account_access(agent_name, account_name)
 
         self.account_name = account_name
@@ -44,20 +43,6 @@ class CDPTrader:
             api_key_secret=Config.CDP_API_KEY_SECRET
         )
         self.network = Config.NETWORK_ID
-
-
-def validate_account_access(agent_name, account_name):
-    """Validate agent can only access own account (prefix matching)"""
-    from config import Config
-    expected_prefix = Config.AGENT_ACCOUNT_PREFIX.get(agent_name)
-
-    if not account_name.startswith(expected_prefix):
-        raise ValueError(f"{agent_name} 无权访问 {account_name}")
-
-    print(f"✅ Account access validated: {agent_name} → {account_name}")
-
-
-__all__ = ['CDPTrader', 'validate_account_access']
 
     async def get_balance(
         self,
@@ -78,8 +63,7 @@ __all__ = ['CDPTrader', 'validate_account_access']
         """
         # Use default address if not provided
         if address is None:
-            from config import Config
-            address = Config.F0X_TRADING
+            address = self.account_address
 
         result = {
             'address': address,
@@ -253,3 +237,14 @@ __all__ = ['CDPTrader', 'validate_account_access']
 
 
 __all__ = ['CDPTrader']
+
+
+def validate_account_access(agent_name, account_name):
+    """Validate agent can only access own account (prefix matching)"""
+    from config import Config
+    expected_prefix = Config.AGENT_ACCOUNT_PREFIX.get(agent_name)
+
+    if not account_name.startswith(expected_prefix):
+        raise ValueError(f"{agent_name} 无权访问 {account_name}")
+
+    print(f"✅ Account access validated: {agent_name} → {account_name}")
