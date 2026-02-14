@@ -9,17 +9,20 @@ Implements:
 
 Author: Vinson <sun1101>
 Created: 2026-02-14
-Version: 2.1.0 (适配真实CDP Python SDK v1.39+)
+Version: 3.0.0 (适配真实CDP Python SDK v1.39+)
+
+References:
+- https://docs.cdp.coinbase.com/server-wallets/v1/introduction/quickstart
+- https://github.com/coinbase/cdp-sdk-python
 """
 
 import os
-import asyncio
 from decimal import Decimal
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 # CDP SDK
 try:
-    from cdp import CdpClient, Wallet
+    from cdp import Wallet, Cdp
 except ImportError:
     print("❌ CDP SDK not found. Install:")
     print("   pip install cdp-sdk")
@@ -38,7 +41,6 @@ class CDPTrader:
     async def _ensure_cdp(self):
         """Ensure CDP SDK is configured"""
         # Configure CDP SDK with API keys from environment
-        from cdp import Cdp
         Cdp.configure(
             self.config.CDP_API_KEY_ID,
             self.config.CDP_API_KEY_SECRET
@@ -98,13 +100,10 @@ class CDPTrader:
             else:
                 raise ValueError(f"Unsupported token: {from_token}")
 
-            from_amount_wei = int(from_amount_decimals * (10 ** decimals))
-
             print(f"💰 Getting quote for {amount} {from_token} → {to_token}")
 
             # Get swap quote using wallet.trade() for preview
-            # Note: CDP SDK doesn't have a separate quote method
-            # We use trade() to get quote preview
+            # Note: CDP SDK wallet.trade() returns a Trade object
             result = self.wallet.trade(
                 amount=from_amount_decimals,
                 from_token=from_address,
@@ -112,12 +111,11 @@ class CDPTrader:
             )
 
             # Parse trade result for quote info
-            # The result is a Trade object
             expected_amount = result.to_amount  # Already converted to decimal
             gas_fee = result.gas_fee  # Gas fee in wei
 
             print(f"✅ Quote received:")
-            print(f"  Expected: {Decimal(expected_amount) / 10**decimals:.2f} {to_token.upper()}")
+            print(f"  Expected: {expected_amount:.2f} {to_token.upper()}")
             print(f"  Gas Fee: {Decimal(gas_fee) / 10**18:.6f} ETH")
             print(f"  Liquidity: ✅ Available")
 
@@ -221,10 +219,10 @@ class CDPTrader:
         await self._ensure_wallet()
 
         try:
-            # CDP SDK wallet has balance property
-            eth_balance = self.wallet.balance  # Native ETH balance
+            # CDP SDK wallet has balance property (native ETH)
+            eth_balance = self.wallet.balance
 
-            # For ERC20 tokens like USDC, we need to call contract
+            # For ERC20 tokens like USDC, we need to query token balance
             # CDP SDK might have a method for this
             usdc_balance = Decimal(0)  # Placeholder - not implemented yet
 
