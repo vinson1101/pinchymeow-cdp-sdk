@@ -116,8 +116,23 @@ class SafeTrader:
                 'quote': dict           # Price quote details
         """
         from_symbol = from_token.lower()
+        from config import Config
 
-        # 1. Enforce hardcoded slippage
+        # 1. Check trading limits (defined by Vinson)
+        try:
+            limits = Config.TRADING_LIMITS[self.agent_name]
+            max_balance_usd = limits['max_balance_usd']
+        except KeyError:
+            print(f"❌ No trading limits defined for {self.agent_name}")
+            return {
+                'status': 'failed',
+                'usd_value': 0.0,
+                'message': f'No trading limits defined for {self.agent_name}',
+                'tx_hash': None,
+                'quote': None
+            }
+
+        # 2. Enforce hardcoded slippage
         if slippage_bps is not None and slippage_bps != self.HARDCODED_SLIPPAGE_BPS:
             print(f"⚠️  滑点必须是 {self.HARDCODED_SLIPPAGE_BPS} bps (1%)")
             print(f"⚠️  忽略传入的 slippage_bps={slippage_bps}")
@@ -125,7 +140,7 @@ class SafeTrader:
 
         actual_slippage_bps = self.HARDCODED_SLIPPAGE_BPS
 
-        # 2. Calculate USD value
+        # 3. Calculate USD value
         try:
             usd_value = await self.calculate_usd_value(from_token, amount)
         except Exception as e:
@@ -137,7 +152,18 @@ class SafeTrader:
                 'quote': None
             }
 
-        # 3. Get price quote
+        # 4. Check if exceeds limit
+        if usd_value > max_balance_usd:
+            print(f"❌ 超过额度: ${usd_value:.2f} > ${max_balance_usd:.2f}")
+            return {
+                'status': 'failed',
+                'usd_value': usd_value,
+                'message': f'超过额度 ${max_balance_usd:.2f}',
+                'tx_hash': None,
+                'quote': None
+            }
+
+        # 5. Get price quote
         try:
             quote = await self.core.get_quote(from_token, to_token, amount)
         except Exception as e:
