@@ -18,25 +18,10 @@ from decimal import Decimal
 from typing import Dict, Any, Optional
 from datetime import datetime
 
-from cdp_core import CDPTrader
+from .cdp_core.cdp_trader import CDPTrader
 from config import Config
 
 class SafeTrader:
-    """Enhanced trading with safety checks"""
-
-    # Constants
-    HARDCODED_SLIPPAGE_BPS = 100  # 1% slippage (hardcoded, non-configurable)
-    APPROVAL_THRESHOLD_USD = 100  # $100 USD threshold for human approval
-
-    def __init__(self, logger=None):
-        """
-        Initialize safe trader
-
-        Args:
-            logger: Optional TransactionLogger instance
-        """
-        self.core = CDPTrader()
-        self.logger = logger
     """Enhanced trading with safety checks"""
 
     # Constants
@@ -268,4 +253,3 @@ class SafeTrader:
 
 # Export
 __all__ = ['SafeTrader']
-test

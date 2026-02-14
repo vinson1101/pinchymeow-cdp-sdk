@@ -22,8 +22,8 @@ class Config:
     CDP_API_KEY_ID = os.getenv("CDP_API_KEY_ID")
     CDP_API_KEY_SECRET = os.getenv("CDP_API_KEY_SECRET")
 
-    # Network
-    NETWORK_ID = "base-mainnet"
+    # Network (for list_token_balances API)
+    NETWORK_ID = "base"
 
     # Token Addresses (Base)
     USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
