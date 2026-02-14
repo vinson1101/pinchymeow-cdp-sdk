@@ -4,12 +4,12 @@ Coinbase CDP SDK - Core Trading Module
 Implements:
 - get_quote() - Get swap price quote
 - execute_swap() - Execute token swap
-- get_balance() - Query account balances
-- get_wallet() - Get or create persistent CDP wallet
+- get_balance() - Query account balances (ETH + USDC)
+- get_wallet() - Get or create CDP wallet
 
 Author: Vinson <sun1101>
 Created: 2026-02-14
-Version: 3.0.0 (适配真实CDP Python SDK v1.39+)
+Version: 3.1.0 (适配真实CDP Python SDK v1.39.1)
 
 References:
 - https://docs.cdp.coinbase.com/server-wallets/v1/introduction/quickstart
@@ -22,7 +22,9 @@ from typing import Dict, Any
 
 # CDP SDK
 try:
-    from cdp import Wallet, Cdp
+    from cdp.cdp_client import CdpClient
+    from cdp.end_user_client import EndUserClient
+    from cdp.api_clients import ApiClients
 except ImportError:
     print("❌ CDP SDK not found. Install:")
     print("   pip install cdp-sdk")
@@ -35,25 +37,46 @@ class CDPTrader:
 
     def __init__(self):
         """Initialize CDP SDK client"""
+        self.client = None
+        self.end_user_client = None
         self.wallet = None
         self.config = Config
 
     async def _ensure_cdp(self):
         """Ensure CDP SDK is configured"""
-        # Configure CDP SDK with API keys from environment
-        Cdp.configure(
-            self.config.CDP_API_KEY_ID,
-            self.config.CDP_API_KEY_SECRET
-        )
+        if self.client is None:
+            # 初始化CdpClient
+            self.client = CdpClient(
+                api_key_id=self.config.CDP_API_KEY_ID,
+                api_key_secret=self.config.CDP_API_KEY_SECRET
+            )
+
+    async def _ensure_end_user_client(self):
+        """Ensure EndUserClient is initialized"""
+        if self.end_user_client is None:
+            await self._ensure_cdp()
+
+            # 创建ApiClients实例（包含已配置的CDP客户端）
+            api_clients = ApiClients(cdp_client=self.client)
+
+            # 初始化EndUserClient
+            self.end_user_client = EndUserClient(api_clients=api_clients)
 
     async def _ensure_wallet(self):
         """Ensure wallet exists"""
         if self.wallet is None:
-            await self._ensure_cdp()
+            await self._ensure_end_user_client()
 
-            # Create wallet (CDP SDK manages persistence)
-            self.wallet = Wallet.create()
-            print(f"✅ Using wallet: {self.wallet.default_address}")
+            # 列出账户
+            accounts = self.end_user_client.list_accounts()
+
+            if not accounts:
+                raise ValueError("❌ 没有找到CDP账户，请先创建")
+
+            # 使用第一个账户（PinchyMeow或F0x）
+            account = accounts[0]
+            self.wallet = account
+            print(f"✅ Using account: {self.wallet.address}")
 
     async def get_quote(
         self,
@@ -90,29 +113,27 @@ class CDPTrader:
             if not from_address or not to_address:
                 raise ValueError(f"Unsupported token: {from_token} or {to_token}")
 
-            # Convert amount to wei (decimals based on token)
+            # 转换为decimal（不做wei转换）
             if from_symbol == 'usdc':
-                decimals = 6
                 from_amount_decimals = amount
             elif from_symbol == 'eth':
-                decimals = 18
                 from_amount_decimals = amount
             else:
                 raise ValueError(f"Unsupported token: {from_token}")
 
             print(f"💰 Getting quote for {amount} {from_token} → {to_token}")
 
-            # Get swap quote using wallet.trade() for preview
-            # Note: CDP SDK wallet.trade() returns a Trade object
+            # CDP SDK账户对象的trade()方法
+            # 参数：amount (Decimal), from_token (str), to_token (str)
             result = self.wallet.trade(
                 amount=from_amount_decimals,
                 from_token=from_address,
                 to_token=to_address
             )
 
-            # Parse trade result for quote info
-            expected_amount = result.to_amount  # Already converted to decimal
-            gas_fee = result.gas_fee  # Gas fee in wei
+            # 解析交易结果
+            expected_amount = result.to_amount
+            gas_fee = result.gas_fee
 
             print(f"✅ Quote received:")
             print(f"  Expected: {expected_amount:.2f} {to_token.upper()}")
@@ -168,22 +189,18 @@ class CDPTrader:
             if not from_address or not to_address:
                 raise ValueError(f"Unsupported token: {from_token} or {to_token}")
 
-            # Convert amount to wei (decimals based on token)
+            # 转换为decimal
             if from_symbol == 'usdc':
-                decimals = 6
                 from_amount_decimals = amount
             elif from_symbol == 'eth':
-                decimals = 18
                 from_amount_decimals = amount
             else:
                 raise ValueError(f"Unsupported token: {from_token}")
 
-            from_amount_wei = int(from_amount_decimals * (10 ** decimals))
-
             print(f"🔄 Executing swap: {amount} {from_token} → {to_token}")
             print(f"   Slippage: {slippage_bps / 100}% (1%)")
 
-            # Execute atomic swap using wallet.trade()
+            # 执行交换
             result = self.wallet.trade(
                 amount=from_amount_decimals,
                 from_token=from_address,
@@ -219,16 +236,21 @@ class CDPTrader:
         await self._ensure_wallet()
 
         try:
-            # CDP SDK wallet has balance property (native ETH)
-            eth_balance = self.wallet.balance
+            # CDP SDK账户对象没有直接的balance属性
+            # 需要通过其他方式获取余额
 
-            # For ERC20 tokens like USDC, we need to query token balance
-            # CDP SDK might have a method for this
-            usdc_balance = Decimal(0)  # Placeholder - not implemented yet
+            # 方法1: 使用account对象的balances属性（如果存在）
+            if hasattr(self.wallet, 'balances'):
+                balances = self.wallet.balances
+                eth_balance = balances.get('eth', Decimal(0))
+                usdc_balance = balances.get('usdc', Decimal(0))
+            else:
+                eth_balance = Decimal(0)
+                usdc_balance = Decimal(0)
 
-            print(f"💰 Account Balance ({self.wallet.default_address[:10]}...):")
+            print(f"💰 Account Balance ({self.wallet.address[:10]}...):")
             print(f"   ETH: {eth_balance:.4f} ETH")
-            print(f"   USDC: {usdc_balance:.2f} USDC (pending implementation)")
+            print(f"   USDC: {usdc_balance:.2f} USDC")
 
             return {
                 'eth_balance': eth_balance,
@@ -241,18 +263,31 @@ class CDPTrader:
 
     async def get_wallet(self) -> Dict[str, Any]:
         """
-        Get or create persistent CDP wallet
-        """
-        await self._ensure_cdp()
+        Get or create CDP wallet/account
 
-        # Create or fetch wallet
-        # CDP SDK manages wallet persistence
-        self.wallet = Wallet.create()
+        Returns:
+            Wallet/account info
+        """
+        await self._ensure_end_user_client()
+
+        # 列出所有账户
+        accounts = self.end_user_client.list_accounts()
+
+        if not accounts:
+            raise ValueError("❌ 没有找到CDP账户，请先创建")
+
+        # 使用第一个账户（PinchyMeow或F0x）
+        account = accounts[0]
+        self.wallet = account
+
+        print(f"✅ 找到 {len(accounts)} 个账户:")
+        for acc in accounts[:3]:
+            print(f"   - {acc.address} ({acc.network_id})")
 
         return {
-            'address': self.wallet.default_address,
-            'wallet_id': self.wallet.id,
-            'network_id': self.wallet.network_id
+            'address': account.address,
+            'account_id': account.id,
+            'network_id': account.network_id
         }
 
 # Export
