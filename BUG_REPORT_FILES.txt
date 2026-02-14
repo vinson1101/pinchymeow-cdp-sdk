@@ -1,0 +1,165 @@
+================================================================================
+CDP SDK BUG REPORT - FILE LOCATIONS
+================================================================================
+
+Created: 2026-02-14
+Repository: https://github.com/coinbase/cdp-sdk
+SDK Version: 1.39.1
+
+================================================================================
+MAIN REPORT FILES
+================================================================================
+
+1. GITHUB_ISSUE_BUG_REPORT.md
+   Location: /root/.openclaw/workspace/pinchymeow-cdp-sdk/GITHUB_ISSUE_BUG_REPORT.md
+   Purpose: Complete GitHub issue report (use this for submission)
+   Size: ~8.5 KB
+   Sections:
+   - Bug Summary (4 bugs)
+   - Detailed descriptions for each bug
+   - Reproduction steps with code
+   - Test environment details
+   - Error chain analysis
+   - Workarounds tested
+   - Priority assessment
+   - Impact on development
+
+2. BUG_REPORT_SUMMARY.md
+   Location: /root/.openclaw/workspace/pinchymeow-cdp-sdk/BUG_REPORT_SUMMARY.md
+   Purpose: Executive summary and submission guide
+   Size: ~6 KB
+   Sections:
+   - How to submit to GitHub
+   - Suggested issue titles
+   - Bug summary table
+   - Test evidence references
+   - Key code examples
+   - Next steps
+
+3. QUICK_BUG_REFERENCE.md
+   Location: /root/.openclaw/workspace/pinchymeow-cdp-sdk/QUICK_BUG_REFERENCE.md
+   Purpose: Quick reference for developers
+   Size: ~2.5 KB
+   Sections:
+   - One-paragraph summary
+   - Bug #1 reproduction code
+   - Error chain diagram
+   - Workaround snippets
+   - Priority ranking
+
+4. GITHUB_ISSUE_SUBMISSION.md
+   Location: /root/.openclaw/workspace/pinchymeow-cdp-sdk/GITHUB_ISSUE_SUBMISSION.md
+   Purpose: Step-by-step submission instructions
+   Size: ~4 KB
+   Sections:
+   - Suggested titles (3 options)
+   - Labels to add
+   - Comment templates
+   - Checklist before submission
+   - gh CLI command
+   - Timeline expectations
+
+5. README_BUG_REPORT.md
+   Location: /root/.openclaw/workspace/pinchymeow-cdp-sdk/README_BUG_REPORT.md
+   Purpose: Complete package overview
+   Size: ~7 KB
+   Sections:
+   - Files created overview
+   - Quick start guide
+   - Bug summary
+   - Impact assessment
+   - Workaround code
+   - Submission checklist
+
+================================================================================
+EVIDENCE FILES (Already in Repository)
+================================================================================
+
+Test Files Demonstrating Bugs:
+- test_swap_final.py           - Comprehensive test (all bugs)
+- test_swap_pinchy_fixed.py    - Monkey-patch workaround
+- test_swap_with_cdp_owner.py  - TRANSFER_FROM_FAILED error
+- test_check_issues.py         - Validation errors
+- test_diagnose_swap.py        - Diagnostic output
+
+Analysis Documents:
+- PROBLEM_ANALYSIS.md          - Technical analysis (Chinese)
+- docs/SMART_ACCOUNT_STATUS.md - Account status
+- README.md                    - Project context
+
+================================================================================
+BUG SUMMARY (QUICK REFERENCE)
+================================================================================
+
+Bug #1: owners[0] = None (CRITICAL)
+  Method: client.evm.get_smart_account()
+  Impact: Cannot sign Permit2 → TRANSFER_FROM_FAILED
+  Workaround: Use list_smart_accounts()
+
+Bug #2: gasFee ValidationError (HIGH)
+  File: common_swap_response_fees.py:31-32
+  Impact: Cannot create swap quotes
+
+Bug #3: liquidityAvailable StrictBool (HIGH)
+  File: create_swap_quote_response.py:40,69-74
+  Impact: Validator rejects boolean True/False
+
+Bug #4: allowance/balance ValidationError (MEDIUM)
+  File: common_swap_response_issues.py:32-33
+  Impact: Optional fields reject None
+
+================================================================================
+SUBMISSION INSTRUCTIONS
+================================================================================
+
+Option 1: Manual Submission
+1. Open: https://github.com/coinbase/cdp-sdk/issues
+2. Click "New Issue"
+3. Copy title from GITHUB_ISSUE_SUBMISSION.md
+4. Copy body from GITHUB_ISSUE_BUG_REPORT.md
+5. Add labels: bug, critical, smart-account, swap, permit2
+6. Submit
+
+Option 2: GitHub CLI
+cd /root/.openclaw/workspace/pinchymeow-cdp-sdk
+gh issue create \
+  --repo coinbase/cdp-sdk \
+  --title "[BUG] Smart Account swap() Returns owners[0]=None" \
+  --body-file GITHUB_ISSUE_BUG_REPORT.md \
+  --label bug,critical,smart-account,swap,permit2
+
+================================================================================
+ENVIRONMENT DETAILS
+================================================================================
+
+Software:
+  - Python: 3.11.0
+  - cdp-sdk: 1.39.1
+  - Network: base-mainnet
+
+Test Accounts:
+  - Smart Account: 0x5Bae0994344d22E0a3377e81204CC7c030c65e96
+  - Owner: 0x145177cd8f0AD7aDE30de1CF65B13f5f45E19e91
+  - Balance: 3 USDC
+
+================================================================================
+QUICK START
+================================================================================
+
+1. Read QUICK_BUG_REFERENCE.md (2 minutes)
+2. Read GITHUB_ISSUE_BUG_REPORT.md (10 minutes)
+3. Submit to GitHub using GITHUB_ISSUE_SUBMISSION.md (5 minutes)
+
+Total time: ~17 minutes
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+After Submission:
+  1. Monitor GitHub for responses
+  2. Provide additional test cases if requested
+  3. Test pre-release fixes when available
+  4. Update issue status as bugs are fixed
+
+================================================================================

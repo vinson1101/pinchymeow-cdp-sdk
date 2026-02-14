@@ -21,13 +21,14 @@ class Config:
     # API Keys (from environment)
     CDP_API_KEY_ID = os.getenv("CDP_API_KEY_ID")
     CDP_API_KEY_SECRET = os.getenv("CDP_API_KEY_SECRET")
+    CDP_WALLET_SECRET = os.getenv("CDP_WALLET_SECRET")
 
     # Network (for list_token_balances API)
     NETWORK_ID = "base"
 
     # Token Addresses (Base)
     USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
-    ETH_ADDRESS = "0x4200000000000000000000000000000000006"  # WETH
+    ETH_ADDRESS = "0x4200000000000000000000000000000000000006"  # WETH
     WETH_ADDRESS = "0x4200000000000000000000000000000000000006"
 
     # Trading Constants
@@ -53,7 +54,8 @@ class Config:
     }
 
     AGENT_ACCOUNTS = {
-        'F0x': '0x398f2eE522cF90DAA0710C37e97CabbFDded50bb',
+        'F0x': '0x125379C903a4E90529A6DCDe40554418fA200399',  # Smart Account
+    'F0x_smart': '0x125379C903a4E90529A6DCDe40554418fA200399',
         'PinchyMeow': '0x145177cd8f0AD7aDE30de1CF65B13f5f45E19e91'
     }
 

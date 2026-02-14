@@ -124,6 +124,8 @@ async def generate_daily_report(
 
     print("\n" + "=" * 60)
 
+    return stats
+
 
 async def main():
     """Main entry point"""

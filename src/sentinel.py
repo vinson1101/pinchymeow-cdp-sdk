@@ -2,18 +2,8 @@
 """
 Price Sentinel Script
 
-Lightweight price monitoring script (no LLM).
+Lightweight price monitoring script (no LLM)
 Checks ETH price every 60 seconds and triggers alert when threshold is crossed.
-
-Usage:
-    python sentinel.py               # Run once
-    python sentinel.py --daemon      # Run as daemon (continuous)
-
-Configuration (via environment variables):
-    AGENT_NAME: Agent name (default: 'F0x')
-    ACCOUNT_NAME: CDP account name (default: 'F0x-trading')
-    ETH_THRESHOLD_USD: ETH price threshold in USD (default: 2000)
-    CHECK_INTERVAL: Check interval in seconds (default: 60)
 
 Author: Vinson <sun1101>
 Created: 2026-02-14
@@ -22,160 +12,197 @@ Version: 1.0.0
 
 import os
 import sys
-import time
-import json
 import argparse
+import json
+import asyncio
+from decimal import Decimal
 from datetime import datetime
 
-# Add parent directory to path for imports
+# Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from cdp_core import CDPTrader
+from .cdp_core.cdp_trader import CDPTrader
 from config import Config
 
-class PriceSentinel:
+
+class Sentinel:
     """Price sentinel for monitoring ETH price"""
 
-    def __init__(self):
-        """Initialize sentinel with configuration from environment"""
-        self.agent_name = os.getenv('AGENT_NAME', 'F0x')
-        self.account_name = os.getenv('ACCOUNT_NAME', 'F0x-trading')
-        self.threshold_eth_price = float(os.getenv('ETH_THRESHOLD_USD', 2000))
-        self.check_interval = int(os.getenv('CHECK_INTERVAL', 60))  # seconds
+    def __init__(self, agent_name='F0x'):
+        """Initialize sentinel with configuration
+
+        Args:
+            agent_name: Agent name (e.g., 'F0x', 'PinchyMeow')
+        """
+        # Agent configuration
+        self.agent_name = agent_name or os.getenv('AGENT_NAME', 'F0x')
+        self.account_name = os.getenv('ACCOUNT_NAME', f'{self.agent_name.upper()}_TRADING')
+
+        # Network configuration
+        self.network = Config.NETWORK_ID
+
+        # Trading limits (from Config)
+        try:
+            self.max_balance_usd = Config.TRADING_LIMITS[self.agent_name]['max_balance_usd']
+            self.trade_amount_usd = Config.TRADING_LIMITS[self.agent_name]['max_single_trade_usd']
+        except KeyError:
+            print(f"⚠️ No trading limits defined for {self.agent_name}")
+            self.max_balance_usd = 2.00
+            self.trade_amount_usd = 0.50
+
+        # Price monitoring configuration
+        self.eth_threshold_usd = float(os.getenv('ETH_THRESHOLD_USD', '2000'))
+        self.check_interval = int(os.getenv('CHECK_INTERVAL', '60'))  # seconds
 
         # Files
-        from config import Config
         self.log_file = os.path.join(Config.LOG_DIR, 'sentinel.log')
-        self.trigger_file = os.path.join(Config.LOG_DIR, 'sentinel-trigger.json')
+        self.trigger_file = os.path.join(Config.TRIGGER_DIR, 'sentinel-trigger.json')
 
-        # Core trading module
-        self.core = None
+        # Initialize CDP trader client
+        self.client = CDPTrader(
+            account_name=self.account_name,
+            agent_name=self.agent_name
+        )
 
-    def log(self, message: str):
-        """Log message to console and file"""
-        timestamp = datetime.utcnow().isoformat()
-        log_message = f"[{timestamp}] {message}\n"
-
-        # Console output
-        print(message)
-
-        # File output
-        try:
-            os.makedirs(os.path.dirname(self.log_file), exist_ok=True)
-            with open(self.log_file, 'a') as f:
-                f.write(log_message)
-        except Exception as e:
-            print(f"❌ 日志写入失败: {e}")
-
-    async def check_price_and_alert(self) -> bool:
+    async def check_price(self) -> float:
         """
-        Check ETH price and write trigger file if threshold crossed
+        Check current ETH price
 
         Returns:
-            True if alert triggered, False otherwise
+            Current ETH price in USD
         """
+        # Get quote for 1 ETH → USDC
         try:
-            self.log('🔍 开始价格检查...')
-
-            # Initialize core
-            if self.core is None:
-                self.core = CDPTrader()
-
-            # Get quote for 1 ETH → USDC
-            quote = await self.core.get_quote(
+            quote = await self.client.get_quote(
                 from_token='eth',
                 to_token='usdc',
                 amount=1.0
             )
 
-            # Calculate ETH price in USD
-            from decimal import Decimal
-            eth_price_usd = float(Decimal(quote['expected_amount']) / 10**6)
+            # Calculate ETH price (USDC has 6 decimals)
+            expected_usdc = Decimal(quote['expected_amount']) / Decimal(10**6)
+            eth_price_usd = float(expected_usdc)
 
-            self.log(f'📊 ETH 当前价格: ${eth_price_usd:.2f}')
-
-            # Check threshold
-            if eth_price_usd < self.threshold_eth_price:
-                # Build alert object
-                alert = {
-                    'type': 'PRICE_ALERT',
-                    'message': f'ETH 价格跌破 ${self.threshold_eth_price}: ${eth_price_usd:.2f}',
-                    'agent': self.agent_name,
-                    'account': self.account_name,
-                    'action': 'evaluate_trade',
-                    'from_token': 'eth',
-                    'to_token': 'usdc',
-                    'amount': 1.0,
-                    'expected_usd': eth_price_usd,
-                    'threshold': self.threshold_eth_price,
-                    'timestamp': datetime.utcnow().isoformat()
-                }
-
-                self.log(f'🚨 触发价格警报！')
-                self.log(f'   当前: ${eth_price_usd:.2f} < 阈值: ${self.threshold_eth_price}')
-
-                # Write trigger file
-                try:
-                    os.makedirs(os.path.dirname(self.trigger_file), exist_ok=True)
-                    with open(self.trigger_file, 'w') as f:
-                        json.dump(alert, f, indent=2)
-
-                    self.log(f'✅ 警报已写入: {self.trigger_file}')
-                    return True
-
-                except Exception as e:
-                    self.log(f'❌ 警报写入失败: {e}')
-                    return False
-
-            else:
-                self.log(f'✅ 价格正常，无需触发')
-                return False
+            return eth_price_usd
 
         except Exception as e:
-            self.log(f'❌ 价格检查失败: {e}')
-            return False
+            print(f"❌ Error getting price: {e}")
+            return 0.0
 
-    async def run_once(self):
-        """Run sentinel check once"""
-        self.log('🚀 哨兵脚本启动 (单次运行)')
-        self.log(f'   Agent: {self.agent_name}')
-        self.log(f'   Account: {self.account_name}')
-        self.log(f'   ETH 阈值: ${self.threshold_eth_price}')
+    async def run_single(self) -> dict:
+        """Run single price check and trigger alert if needed"""
+        print(f"🔍 Checking price at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-        await self.check_price_and_alert()
+        # Check price
+        eth_price_usd = await self.check_price()
+
+        print(f"📊 ETH Price: ${eth_price_usd:.2f} USD")
+        print(f"📊 Threshold: ${self.eth_threshold_usd:.2f} USD")
+
+        if eth_price_usd < self.eth_threshold_usd:
+            print(f"🚨 Price dropped below threshold! Triggering alert...")
+            await self.trigger_alert(eth_price_usd)
+            print(f"✅ Alert triggered successfully")
+        else:
+            print(f"✅ Price above threshold, no action needed")
+
+        # Sleep before next check
+        await asyncio.sleep(self.check_interval)
+
+    async def trigger_alert(self, eth_price_usd: float) -> bool:
+        """
+        Trigger price alert by writing to trigger file
+
+        Args:
+            eth_price_usd: Current ETH price in USD
+
+        Returns:
+            True if alert written, False otherwise
+        """
+        alert = {
+            'type': 'PRICE_ALERT',
+            'message': f'ETH price dropped below ${self.eth_threshold_usd}: ${eth_price_usd:.2f}',
+            'agent': self.agent_name,
+            'account': self.account_name,
+            'action': 'evaluate_trade',
+            'from_token': 'eth',
+            'to_token': 'usdc',
+            'amount': self.trade_amount_usd,
+            'eth_price_usd': eth_price_usd,
+            'threshold_usd': self.eth_threshold_usd,
+            'timestamp': datetime.now().isoformat()
+        }
+
+        # Write to trigger file
+        with open(self.trigger_file, 'w') as f:
+            json.dump(alert, f, indent=2)
+
+        print(f"✅ Alert written to {self.trigger_file}")
+
+        return True
 
     async def run_daemon(self):
-        """Run sentinel as continuous daemon"""
-        self.log('🚀 哨兵脚本启动 (守护进程)')
-        self.log(f'   Agent: {self.agent_name}')
-        self.log(f'   Account: {self.account_name}')
-        self.log(f'   检查间隔: {self.check_interval} 秒')
-        self.log(f'   ETH 阈值: ${self.threshold_eth_price}')
+        """Run sentinel in daemon mode (continuous monitoring)"""
+        print(f"🔄 Starting daemon mode for {self.agent_name}")
+        print(f"   Account: {self.account_name}")
+        print(f"   Check Interval: {self.check_interval} seconds")
+        print(f"   ETH Threshold: ${self.eth_threshold_usd:.2f}")
 
         while True:
-            await self.check_price_and_alert()
+            await self.run_single()
 
-            # Sleep until next check
-            self.log(f'⏳ 等待 {self.check_interval} 秒...')
-            await asyncio.sleep(self.check_interval)
+    async def close(self):
+        """Close CDP client connection"""
+        if self.client:
+            await self.client.close()
 
-def main():
-    """Main entry point"""
-    import asyncio
+    async def main(self):
+        """Main entry point"""
+        parser = argparse.ArgumentParser(
+            description='Price Sentinel Script',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            epilog='[%(prog)s] [options]'
+        )
 
-    # Parse arguments
-    parser = argparse.ArgumentParser(description='Price Sentinel Script')
-    parser.add_argument('--daemon', action='store_true', help='Run as continuous daemon')
-    args = parser.parse_args()
+        parser.add_argument(
+            '--daemon',
+            action='store_true',
+            help='Run in daemon mode (continuous monitoring)'
+        )
 
-    # Create sentinel
-    sentinel = PriceSentinel()
+        args = parser.parse_args()
 
-    # Run
-    if args.daemon:
-        asyncio.run(sentinel.run_daemon())
-    else:
-        asyncio.run(sentinel.run_once())
+        print(f"🚀 Price Sentinel Starting")
+        print(f"   Agent: {self.agent_name}")
+        print(f"   Account: {self.account_name}")
+        print(f"   Log File: {self.log_file}")
+        print(f"   Trigger File: {self.trigger_file}")
+        print(f"   Check Interval: {self.check_interval} seconds")
+        print(f"   ETH Threshold: ${self.eth_threshold_usd:.2f}")
+
+        try:
+            if args.daemon:
+                await self.run_daemon()
+            else:
+                await self.run_single()
+
+        except KeyboardInterrupt:
+            print("\n")
+            print("🛑 Sentinel stopped")
+
+        print(f"✅ Exiting normally")
+
+
+async def main():
+    """Wrapper for async execution"""
+    try:
+        await Sentinel().main()
+    except Exception as e:
+        print(f"❌ Fatal error: {e}")
+        import sys
+
+    sys.exit(1)
+
 
 if __name__ == '__main__':
     main()
