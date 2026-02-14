@@ -9,3 +9,5 @@ from .trader import SafeTrader
 from .transaction_logger import TransactionLogger
 
 __all__ = ['CDPTrader', 'SafeTrader', 'TransactionLogger']
+test
+test
