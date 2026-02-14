@@ -28,14 +28,18 @@ class SafeTrader:
     HARDCODED_SLIPPAGE_BPS = 100  # 1% slippage (hardcoded, non-configurable)
     APPROVAL_THRESHOLD_USD = 100  # $100 USD threshold for human approval
 
-    def __init__(self, logger=None):
+    def __init__(self, account_name, agent_name, logger=None):
         """
         Initialize safe trader
 
         Args:
+            account_name: Account name (e.g., 'F0X_TRADING')
+            agent_name: Agent name (e.g., 'F0x')
             logger: Optional TransactionLogger instance
         """
-        self.core = CDPTrader()
+        self.core = CDPTrader(account_name, agent_name)
+        self.agent_name = agent_name
+        self.account_name = account_name
         self.logger = logger
 
     async def calculate_usd_value(

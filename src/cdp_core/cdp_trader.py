@@ -22,13 +22,42 @@ from config import Config
 class CDPTrader:
     """Core CDP trading functionality"""
 
-    def __init__(self):
-        """Initialize CDP trader with API keys"""
+    def __init__(self, account_name, agent_name):
+        """
+        Initialize CDP trader with account and agent names
+
+        Args:
+            account_name: Account name (e.g., 'F0X_TRADING')
+            agent_name: Agent name (e.g., 'F0x')
+        """
+        # Validate account access (prefix matching)
+        from config import Config
+        validate_account_access(agent_name, account_name)
+
+        self.account_name = account_name
+        self.agent_name = agent_name
+        self.account_address = Config.AGENT_ACCOUNTS.get(agent_name)
+
+        # Initialize CDP client
         self.client = CdpClient(
             api_key_id=Config.CDP_API_KEY_ID,
             api_key_secret=Config.CDP_API_KEY_SECRET
         )
         self.network = Config.NETWORK_ID
+
+
+def validate_account_access(agent_name, account_name):
+    """Validate agent can only access own account (prefix matching)"""
+    from config import Config
+    expected_prefix = Config.AGENT_ACCOUNT_PREFIX.get(agent_name)
+
+    if not account_name.startswith(expected_prefix):
+        raise ValueError(f"{agent_name} 无权访问 {account_name}")
+
+    print(f"✅ Account access validated: {agent_name} → {account_name}")
+
+
+__all__ = ['CDPTrader', 'validate_account_access']
 
     async def get_balance(
         self,
@@ -126,6 +155,10 @@ class CDPTrader:
         if not from_address or not to_address:
             raise ValueError(f"Unsupported token: {from_token} or {to_token}")
 
+        # Calculate amount in smallest unit (wei)
+        decimals = 18 if from_token_lower == 'eth' else 6
+        from_amount_wei = int(amount * (10 ** decimals))
+
         result = {
             'from_token': from_token_lower,
             'to_token': to_token_lower,
@@ -136,17 +169,18 @@ class CDPTrader:
         }
 
         try:
-            # Use swap quote API
-            quote = await swap_get_swap_price(
-                self.client.api_clients.onchain_data,
-                from_address,
-                to_address,
-                self.network,
-                amount
+            # Use CDP SDK get_swap_price (free, no gas)
+            quote = await self.client.evm.get_swap_price(
+                from_token=from_address,
+                to_token=to_address,
+                from_amount=from_amount_wei,
+                network=self.network,
+                taker=self.account_address  # Use account address as taker
             )
 
-            result['expected_amount'] = quote.get('expected_amount', 0)
-            result['price'] = quote.get('price', 0.0)
+            # Parse result
+            result['expected_amount'] = int(quote.expected_amount)
+            result['price'] = float(quote.price) if quote.price else 0.0
 
         except Exception as e:
             print(f"❌ Error getting quote: {e}")

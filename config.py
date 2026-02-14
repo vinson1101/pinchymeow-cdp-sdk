@@ -46,6 +46,27 @@ class Config:
     LOG_DIR = "/root/.openclaw/workspace/data"
     TRIGGER_DIR = "/root/.openclaw/workspace/triggers"
 
+    # Agent Account Configuration
+    AGENT_ACCOUNT_PREFIX = {
+        'F0x': 'F0X_TRADING',
+        'PinchyMeow': 'PINCHYMEOW_MAIN'
+    }
+
+    AGENT_ACCOUNTS = {
+        'F0x': '0x398f2eE522cF90DAA0710C37e97CabbFDded50bb',
+        'PinchyMeow': '0x145177cd8f0AD7aDE30de1CF65B13f5f45E19e91'
+    }
+
+    # Trading Limits (defined by Vinson)
+    TRADING_LIMITS = {
+        'F0x': {
+            'max_balance_usd': 2.00,  # Current limit (adjustable by Vinson)
+            'allowed_pairs': ['usdc-eth', 'eth-usdc'],
+            'max_single_trade_usd': 0.50,  # Per-trade limit
+            'max_daily_trades': 20  # Daily trade count limit
+        }
+    }
+
     @staticmethod
     def validate():
         """Validate required configuration"""
