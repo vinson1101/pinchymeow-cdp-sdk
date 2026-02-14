@@ -1,35 +1,43 @@
 """
 Transaction Logger Module
 
-Implements:
-- JSONL format logging
-- Daily rotation (YYYY-MM-DD.jsonl)
-- Transaction fields: timestamp, type, agent, account, amounts, tx_hash, status
-- Automatic directory creation
+Implements per-account transaction logging with daily rotation
 
 Author: Vinson <sun1101>
 Created: 2026-02-14
-Version: 1.0.0
+Version: 2.0.0 (per-account isolation)
 """
 
 import os
 import json
 from datetime import datetime
 from typing import Dict, Any
+from config import Config
+
 
 class TransactionLogger:
-    """Transaction logger with daily JSONL rotation"""
+    """Transaction logger with per-account isolation"""
 
-    def __init__(self, log_dir: str = None):
+    def __init__(self, agent_name: str, log_dir: str = None):
         """
         Initialize transaction logger
 
         Args:
-            log_dir: Directory for log files (default: Config.LOG_DIR/transactions)
+            agent_name: Agent name (e.g., 'F0x', 'PinchyMeow')
+            log_dir: Base directory for logs (default: Config.LOG_DIR)
         """
         from config import Config
 
-        self.log_dir = log_dir or os.path.join(Config.LOG_DIR, 'transactions')
+        self.agent_name = agent_name
+        self.base_dir = log_dir or Config.LOG_DIR
+
+        # Create per-account subdirectory
+        self.log_dir = os.path.join(
+            self.base_dir,
+            'transactions',
+            agent_name
+        )
+
         self.ensure_dir()
 
     def ensure_dir(self):
@@ -43,7 +51,7 @@ class TransactionLogger:
         Log a transaction to daily JSONL file
 
         Args:
-            transaction: Dict with transaction details
+            transaction: Transaction details dict
         """
         # Get current date in YYYY-MM-DD format
         date_str = datetime.utcnow().strftime('%Y-%m-%d')
@@ -59,12 +67,10 @@ class TransactionLogger:
         try:
             with open(log_file, 'a') as f:
                 f.write(json.dumps(transaction) + '\n')
-
-            print(f"📝 交易已记录: {log_file}")
-
+            print(f"📝 Transaction logged: {log_file}")
         except Exception as e:
-            print(f"❌ 日志写入失败: {e}")
-            print(f"   文件: {log_file}")
+            print(f"❌ Log write failed: {e}")
+            print(f"   File: {log_file}")
 
     def get_transactions(self, date: str = None) -> list:
         """
@@ -90,9 +96,9 @@ class TransactionLogger:
                 for line in f:
                     if line.strip():
                         transactions.append(json.loads(line))
-
         except Exception as e:
-            print(f"❌ 日志读取失败: {e}")
+            print(f"❌ Log read failed: {e}")
+            print(f"   File: {log_file}")
 
         return transactions
 
@@ -104,25 +110,17 @@ class TransactionLogger:
             date: Date in YYYY-MM-DD format (default: today)
 
         Returns:
-            Dict with statistics:
-                - date: str
-                - total_tx: int
-                - success_tx: int
-                - failed_tx: int
-                - pending_tx: int
-                - total_volume_usd: float
-                - agents: dict (agent_name -> {count, volume})
+            Dict with statistics
         """
         transactions = self.get_transactions(date)
 
         stats = {
-            'date': date or datetime.utcnow().strftime('%Y-%m-%d'),
+            'date': date,
             'total_tx': len(transactions),
             'success_tx': 0,
             'failed_tx': 0,
             'pending_tx': 0,
-            'total_volume_usd': 0.0,
-            'agents': {}
+            'total_volume_usd': 0.0
         }
 
         for tx in transactions:
@@ -137,18 +135,10 @@ class TransactionLogger:
 
             # Accumulate volume
             usd_value = tx.get('usd_value', 0.0)
-            if isinstance(usd_value, (int, float, str)):
+            if isinstance(usd_value, (int, float)):
                 stats['total_volume_usd'] += float(usd_value)
-
-            # Group by agent
-            agent = tx.get('agent', 'unknown')
-            if agent not in stats['agents']:
-                stats['agents'][agent] = {'count': 0, 'volume': 0.0}
-
-            stats['agents'][agent]['count'] += 1
-            stats['agents'][agent]['volume'] += float(usd_value)
 
         return stats
 
-# Export
+
 __all__ = ['TransactionLogger']
